@@ -3,7 +3,7 @@ module Spree
 
     preference :merchant_domain, :string
     preference :terminal_id, :string
-    preference :terminal_secret, :string
+    preference :terminal_secret, :password
 
     def actions
       %w{capture void}
