@@ -1,0 +1,15 @@
+<fieldset id="order_details" data-hook>
+  <div class="clear"></div>
+  <legend align="center"><%= Spree.t(:confirm) %></legend>
+  <%= render :partial => 'spree/shared/order_details', :locals => { :order => @order } %>
+</fieldset>
+
+<br />
+
+<div class="form-buttons" data-hook="buttons">
+  <%= form_tag monetaweb_buy_path(@order.id, @payment_method.id) do -%>
+	<%= submit_tag Spree.t(:place_order), :class => 'continue button primary' %>
+  <% end %>
+</div>
+
+<%= link_to t('monetaweb.cancel_and_back'), checkout_state_url(:payment) %>
