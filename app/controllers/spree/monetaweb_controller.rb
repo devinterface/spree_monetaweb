@@ -1,29 +1,25 @@
 module Spree
   class MonetawebController < Spree::StoreController
-    
+    skip_before_filter :verify_authenticity_token, :only => [:notify]
+    before_filter :load_order
+    before_filter :load_payment_method
     helper Spree::OrdersHelper
 
     def confirm
-      @order = Order.find(params[:order_id])
-      @payment_method = PaymentMethod.find params[:payment_method_id]
     end
 
 
     def buy
-      if params[:payment_method_id] and PaymentMethod.exists? params[:payment_method_id]
-        @payment_method = PaymentMethod.find params[:payment_method_id]
-      else
+      unless @payment_method.present?
         flash[:error] = "ERRORE, parametro payment_method_id errato, il metodo di pagamento con id=#{params[:payment_method_id]} non esiste !"
-        redirect_to checkout_state_url(:payment)
+        redirect_to checkout_state_url(:payment) and return
       end
-      @order = Order.find(params[:order_id])
-      setefi_hosted_page_url = initialize_transaction()
+      setefi_hosted_page_url = initialize_transaction
       redirect_to setefi_hosted_page_url
     end
 
 
     def notify
-      payment_id = params["paymentid"]
       payment_result = {
           paymentid: params["paymentid"],
           result: params["result"],
@@ -37,12 +33,17 @@ module Spree
           customfield: params["customfield"],
           securityToken: params["securitytoken"]
       }
+      if payment_result[:result] == 'CAPTURED'
 
-      PAYMENT_RESULTS[payment_id] = payment_result
+      end
+
+      payment_result_url(payment_result)
     end
 
     def recovery
+    end
 
+    def result
     end
 
 
@@ -59,37 +60,53 @@ module Spree
       transaction_init_path = '/monetaweb/payment/2/xml'
       init_uri = URI(setefi_payment_gateway_domain + transaction_init_path)
 
-
-      # Setefi notifies the payment result to the merchant notify url
-      # The merchant response, when the notify url is called, should contain the url where the card holder will be redirected to view the payment result (e.g. Payment Ok, Payment Failed)
-      merchant_url_to_notify_payment_result = monetaweb_notify_url
-      # If the notify url is not reachable, Setefi will redirect the card holder to the merchant recovery url
-      merchant_recovery_url = monetaweb_recovery_url
-
       parameters = {
-          id: @terminal_id, # Terminal Id
+          id: @terminal_id,
           password: @terminal_secret,
           operationType: 'initialize',
           amount: @order.total,
-          currencyCode: '978', #EUR
+          currencyCode: '978',
           laguage: 'ITA',
-          responseToMerchantUrl: merchant_url_to_notify_payment_result,
-          recoveryUrl: merchant_recovery_url,
+          responseToMerchantUrl: notify_payment_result_url,
+          recoveryUrl: monetaweb_recovery_url(:order_id => @order.number, :payment_method_id => @payment_method.id),
           merchantOrderId: @order.number,
-          cardHolderName: 'Tom Smith',
-          cardHolderEmail: 'tom.smith@test.com',
+          cardHolderName: @order.billing_address.full_name,
+          cardHolderEmail: @order.email,
           description: 'Description',
-          customField: 'Custom Field'
       }
 
       response = Net::HTTP.post_form(init_uri, parameters)
       raise "Payment initialization failed: #{response.body}" unless response.code == "200"
 
-      xmlResponse = REXML::Document.new(response.body)
-      payment_id = xmlResponse.root.elements["paymentid"].text
-      hosted_page_url = xmlResponse.root.elements["hostedpageurl"].text
+      xml_response = REXML::Document.new(response.body)
+      payment_id = xml_response.root.elements["paymentid"].text
+      hosted_page_url = xml_response.root.elements["hostedpageurl"].text
 
       "#{hosted_page_url}?PaymentID=#{payment_id}"
+    end
+
+    def load_order
+      @order = Spree::Order.find_by!(number: params[:order_id])
+    end
+
+    def load_payment_method
+      @payment_method = PaymentMethod.find params[:payment_method_id]
+    end
+
+    def notify_payment_result_url
+      if Rails.env.development?
+        "#{@payment_method.preferred_development_merchant_domain}/monetaweb/notify/#{@order.number}/#{@payment_method.id}"
+      else
+        monetaweb_notify_url(:order_id => @order.number, :payment_method_id => @payment_method.id)
+      end
+    end
+
+    def payment_result_url(payment_result)
+      if Rails.env.development?
+        "#{@payment_method.preferred_development_merchant_domain}/monetaweb/result/#{@order.number}/#{@payment_method.id}/#{payment_result[:result]}"
+      else
+        monetaweb_result_url(:order_id => @order.number, :payment_method_id => @payment_method.id, :result => payment_result[:result])
+      end
     end
 
   end

@@ -7,7 +7,7 @@
 <br />
 
 <div class="form-buttons" data-hook="buttons">
-  <%= form_tag monetaweb_buy_path(@order.id, @payment_method.id) do -%>
+  <%= form_tag monetaweb_buy_path(@order.number, @payment_method.id) do -%>
 	<%= submit_tag Spree.t(:place_order), :class => 'continue button primary' %>
   <% end %>
 </div>

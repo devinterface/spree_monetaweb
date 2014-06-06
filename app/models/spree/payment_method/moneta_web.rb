@@ -1,9 +1,9 @@
 module Spree
   class PaymentMethod::MonetaWeb < PaymentMethod
 
-    preference :merchant_domain, :string
-    preference :terminal_id, :string
-    preference :terminal_secret, :password
+    preference :development_merchant_domain, :string
+    preference :terminal_id, :string, :required
+    preference :terminal_secret, :password, :required
 
     def actions
       %w{capture void}

@@ -23,7 +23,7 @@ module Spree
          render :edit and return
       end
 
-      redirect_to monetaweb_confirm_path(:order_id => @order.id, :payment_method_id => payment_method.id) and return
+      redirect_to monetaweb_confirm_path(:order_id => @order.number, :payment_method_id => payment_method.id) and return
     end
 
   end
