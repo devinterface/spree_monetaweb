@@ -37,7 +37,11 @@ module Spree
 
       end
 
-      payment_result_url(payment_result)
+      @url = "#{payment_result_url(payment_result)}"
+      response.status = 200
+      response.content_type = 'text/plain'
+      response.body = @url
+      render :layout => false
     end
 
     def recovery
