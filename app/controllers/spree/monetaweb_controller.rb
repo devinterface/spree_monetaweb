@@ -3,6 +3,7 @@ module Spree
     skip_before_filter :verify_authenticity_token, :only => [:notify]
     before_filter :load_order
     before_filter :load_payment_method
+    before_filter :load_payment, :only => [:notify, :recovery, :result]
     helper Spree::OrdersHelper
 
     def confirm
@@ -40,10 +41,9 @@ module Spree
           securityToken: params["securitytoken"]
       }
       if payment_result[:result] == 'CAPTURED'
-        @payment = @order.payments.where(:monetaweb_payment_id => payment_result[:paymentid]).first
         if @payment
-          @payment.complete!
-          @order.update_attributes({:state => "complete", :completed_at => Time.now}, :without_protection => true)
+          #@payment.complete!
+          @order.update_attributes(:state => "complete", :completed_at => Time.now)
           @order.finalize!
         else
           @payment.failure!
@@ -62,9 +62,9 @@ module Spree
 
     def result
       if params[:result] == 'CAPTURED'
-        #session[:order_id] = nil
-        redirect_to checkout_state_url(:complete) # order_url(@order, {:checkout_complete => true, :order_token => @order.token}), :success => I18n.t("monetaweb.success")
+        redirect_to order_url(@order, {:checkout_complete => true, :order_token => @order.token}), :success => I18n.t("monetaweb.success")
       elsif params[:result] == 'CANCELED'
+        @payment.failure!
         flash[:error] = I18n.t('monetaweb.canceled')
         redirect_to checkout_state_url(:payment)
       end
@@ -92,7 +92,7 @@ module Spree
           currencyCode: '978',
           laguage: 'ITA',
           responseToMerchantUrl: notify_payment_result_url,
-          recoveryUrl: monetaweb_recovery_url(:order_id => @order.number, :payment_method_id => @payment_method.id),
+          recoveryUrl: monetaweb_recovery_url(:order_id => @order.number, :payment_method_id => @payment_method.id, :payment_identifier => @payment.identifier),
           merchantOrderId: @order.number,
           cardHolderName: @order.billing_address.full_name,
           cardHolderEmail: @order.email,
@@ -118,20 +118,24 @@ module Spree
     def load_payment_method
       @payment_method = PaymentMethod.find params[:payment_method_id]
     end
+    
+    def load_payment
+      @payment = @order.payments.where(:identifier => params[:payment_identifier]).first
+    end
 
     def notify_payment_result_url
       if Rails.env.development?
-        "#{@payment_method.preferred_development_merchant_domain}/monetaweb/notify/#{@order.number}/#{@payment_method.id}"
+        "#{@payment_method.preferred_development_merchant_domain}/monetaweb/notify/#{@order.number}/#{@payment_method.id}/#{@payment.identifier}"
       else
-        monetaweb_notify_url(:order_id => @order.number, :payment_method_id => @payment_method.id)
+        monetaweb_notify_url(:order_id => @order.number, :payment_method_id => @payment_method.id, :payment_identifier => @payment.identifier)
       end
     end
 
     def payment_result_url(payment_result)
       if Rails.env.development?
-        "#{@payment_method.preferred_development_merchant_domain}/monetaweb/result/#{@order.number}/#{@payment_method.id}/#{payment_result[:result]}"
+        "#{@payment_method.preferred_development_merchant_domain}/monetaweb/result/#{@order.number}/#{@payment_method.id}/#{@payment.identifier}/#{payment_result[:result]}"
       else
-        monetaweb_result_url(:order_id => @order.number, :payment_method_id => @payment_method.id, :result => payment_result[:result])
+        monetaweb_result_url(:order_id => @order.number, :payment_method_id => @payment_method.id, :payment_identifier => @payment.identifier, :result => payment_result[:result])
       end
     end
 
