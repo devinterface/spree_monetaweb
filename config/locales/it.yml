@@ -3,4 +3,7 @@
 
 it:
   monetaweb:
+    intro: "Moneta Web, il POS virtuale di Setefi di Intesa Sanpaolo"
     cancel_and_back: Cancella e torna indietro
+    success: Il pagamento è andato a buon fine
+    canceled: Il pagamento è stato cancellato

@@ -14,11 +14,11 @@ module Spree
 
       update_params = object_params.dup
       update_params.delete(:payments_attributes)
+      load_order
       if @order.update_attributes(update_params)
         fire_event('spree.checkout.update')
       end
 
-      load_order
       if not @order.errors.empty?
          render :edit and return
       end

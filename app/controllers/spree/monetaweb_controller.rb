@@ -14,6 +14,12 @@ module Spree
         flash[:error] = "ERRORE, parametro payment_method_id errato, il metodo di pagamento con id=#{params[:payment_method_id]} non esiste !"
         redirect_to checkout_state_url(:payment) and return
       end
+
+      @payment = @order.payments.create!({:amount => @order.total,
+                                          :payment_method => @payment_method
+                                         })
+      @payment.started_processing!
+
       setefi_hosted_page_url = initialize_transaction
       redirect_to setefi_hosted_page_url
     end
@@ -34,7 +40,14 @@ module Spree
           securityToken: params["securitytoken"]
       }
       if payment_result[:result] == 'CAPTURED'
-
+        @payment = @order.payments.where(:monetaweb_payment_id => payment_result[:paymentid]).first
+        if @payment
+          @payment.complete!
+          @order.update_attributes({:state => "complete", :completed_at => Time.now}, :without_protection => true)
+          @order.finalize!
+        else
+          @payment.failure!
+        end
       end
 
       @url = "#{payment_result_url(payment_result)}"
@@ -48,6 +61,13 @@ module Spree
     end
 
     def result
+      if params[:result] == 'CAPTURED'
+        #session[:order_id] = nil
+        redirect_to checkout_state_url(:complete) # order_url(@order, {:checkout_complete => true, :order_token => @order.token}), :success => I18n.t("monetaweb.success")
+      elsif params[:result] == 'CANCELED'
+        flash[:error] = I18n.t('monetaweb.canceled')
+        redirect_to checkout_state_url(:payment)
+      end
     end
 
 
@@ -84,6 +104,8 @@ module Spree
 
       xml_response = REXML::Document.new(response.body)
       payment_id = xml_response.root.elements["paymentid"].text
+      @payment.update_column(:monetaweb_payment_id, payment_id)
+      @payment.pend!
       hosted_page_url = xml_response.root.elements["hostedpageurl"].text
 
       "#{hosted_page_url}?PaymentID=#{payment_id}"
