@@ -4,6 +4,7 @@ module Spree
     preference :development_merchant_domain, :string
     preference :terminal_id, :string, :required
     preference :terminal_secret, :password, :required
+    preference :auto_capture, :boolean
 
     def actions
       %w{capture void}
@@ -11,7 +12,7 @@ module Spree
 
     # Indicates whether its possible to capture the payment
     def can_capture?(payment)
-      ['checkout', 'pending'].include?(payment.state)
+      ['pending'].include?(payment.state)
     end
 
     # Indicates whether its possible to void the payment.

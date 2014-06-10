@@ -41,13 +41,11 @@ module Spree
           securityToken: params["securitytoken"]
       }
       if payment_result[:result] == 'CAPTURED'
-        if @payment
-          #@payment.complete!
-          @order.update_attributes(:state => "complete", :completed_at => Time.now)
-          @order.finalize!
-        else
-          @payment.failure!
+        if @payment_method.preferred_auto_capture
+          @payment.complete!
         end
+        @order.update_attributes(:state => "complete", :completed_at => Time.now)
+        @order.finalize!
       end
 
       @url = "#{payment_result_url(payment_result)}"
@@ -73,14 +71,14 @@ module Spree
 
     private
 
-    def initialize_transaction()
+    def initialize_transaction
       require 'net/http'
       require 'rexml/document'
 
       @terminal_id = @payment_method.preferred_terminal_id
       @terminal_secret = @payment_method.preferred_terminal_secret
 
-      setefi_payment_gateway_domain = 'https://test.monetaonline.it'
+
       transaction_init_path = '/monetaweb/payment/2/xml'
       init_uri = URI(setefi_payment_gateway_domain + transaction_init_path)
 
@@ -118,7 +116,7 @@ module Spree
     def load_payment_method
       @payment_method = PaymentMethod.find params[:payment_method_id]
     end
-    
+
     def load_payment
       @payment = @order.payments.where(:identifier => params[:payment_identifier]).first
     end
@@ -136,6 +134,14 @@ module Spree
         "#{@payment_method.preferred_development_merchant_domain}/monetaweb/result/#{@order.number}/#{@payment_method.id}/#{@payment.identifier}/#{payment_result[:result]}"
       else
         monetaweb_result_url(:order_id => @order.number, :payment_method_id => @payment_method.id, :payment_identifier => @payment.identifier, :result => payment_result[:result])
+      end
+    end
+
+    def setefi_payment_gateway_domain
+      if Rails.env.production?
+        'https://www.monetaonline.it'
+      else
+        'https://test.monetaonline.it'
       end
     end
 
